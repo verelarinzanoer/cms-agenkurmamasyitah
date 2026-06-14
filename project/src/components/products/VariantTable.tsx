@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -7,8 +7,8 @@ import { Plus, Trash2 } from 'lucide-react';
 export interface Variant {
   id: string;
   name: string;
-  price: string;
-  stock: string;
+  price: string | number;
+  stock: string | number;
 }
 
 interface VariantTableProps {
@@ -17,12 +17,24 @@ interface VariantTableProps {
 }
 
 export const VariantTable = ({ variants, onVariantsChange }: VariantTableProps) => {
-  const [localVariants, setLocalVariants] = useState<Variant[]>(variants);
+  const [localVariants, setLocalVariants] = useState<Variant[]>([]);
+  // Track whether we've received the initial data from the parent (e.g., loaded from DB)
+  const initializedRef = useRef(false);
 
-  // Sync parent -> local only when parent changes from outside (e.g., reset)
+  // Sync parent -> local ONLY on the first time parent sends non-empty variants
+  // (i.e., when edit mode loads data from Supabase). After that, local state is the source of truth.
   useEffect(() => {
-    setLocalVariants(variants);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!initializedRef.current && variants.length > 0) {
+      initializedRef.current = true;
+      // Normalize price and stock to string to handle DB numbers correctly
+      const normalized = variants.map((v) => ({
+        ...v,
+        price: String(v.price ?? ''),
+        stock: String(v.stock ?? ''),
+      }));
+      setLocalVariants(normalized);
+    }
+  }, [variants]);
 
   const syncToParent = useCallback((updated: Variant[]) => {
     onVariantsChange(updated);

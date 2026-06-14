@@ -141,7 +141,7 @@ export const ProductForm = () => {
       if (stock === '') newErrors.stock = 'Stok wajib diisi';
     } else {
       if (variants.length < 2) newErrors.variants = 'Minimal 2 varian diperlukan';
-      if (variants.some(v => !v.name || v.price <= 0 || v.stock < 0)) {
+      if (variants.some(v => !v.name || Number(v.price) <= 0 || Number(v.stock) < 0)) {
         newErrors.variants = 'Harap isi semua detail varian dengan benar';
       }
     }
@@ -230,25 +230,22 @@ export const ProductForm = () => {
 
         // Handle Variants Update
         if (hasVariants) {
-           for (const v of variants) {
-              if (v.id && v.id.length > 20) {
-                 await supabase.from('product_variants').update({
-                   name: v.name, price: Number(v.price), stock: Number(v.stock)
-                 }).eq('id', v.id);
-              } else {
-                 await supabase.from('product_variants').insert([{
-                   product_id: id, name: v.name, price: Number(v.price), stock: Number(v.stock)
-                 }]);
-              }
-           }
-           const currentIds = variants.filter(v => v.id && v.id.length > 20).map(v => v.id);
-           if (currentIds.length > 0) {
-              await supabase.from('product_variants').delete().eq('product_id', id).not('id', 'in', `(${currentIds.join(',')})`);
-           } else {
-              await supabase.from('product_variants').delete().eq('product_id', id);
-           }
+          // Simplest & most reliable approach: delete all existing variants, then re-insert
+          await supabase.from('product_variants').delete().eq('product_id', id);
+
+          if (variants.length > 0) {
+            const { error: variantError } = await supabase.from('product_variants').insert(
+              variants.map(v => ({
+                product_id: id,
+                name: v.name,
+                price: Number(v.price),
+                stock: Number(v.stock),
+              }))
+            );
+            if (variantError) throw variantError;
+          }
         } else {
-           await supabase.from('product_variants').delete().eq('product_id', id);
+          await supabase.from('product_variants').delete().eq('product_id', id);
         }
 
         toast.success('Produk berhasil diperbarui');
@@ -452,13 +449,13 @@ export const ProductForm = () => {
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   className="border-slate-200 flex-1"
-                  disabled={loading || hasVariants}
+                  disabled={loading}
                   min="0"
                 />
                 <Select
                   value={weightUnit}
                   onValueChange={(val: any) => setWeightUnit(val)}
-                  disabled={loading || hasVariants}
+                  disabled={loading}
                 >
                   <SelectTrigger className="w-28 border-slate-200">
                     <SelectValue />
