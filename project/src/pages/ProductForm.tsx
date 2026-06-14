@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
+import { VariantTable } from '@/components/products/VariantTable';
 import { ImageUploader, UploadedImage } from '@/components/products/ImageUploader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,7 @@ export const ProductForm = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [variants, setVariants] = useState<any[]>([]);
 
   // Track existing image IDs for deletion sync
   const [existingImageIds, setExistingImageIds] = useState<string[]>([]);
@@ -99,6 +101,8 @@ export const ProductForm = () => {
         if (!data.has_variants) {
           setPrice(data.price != null ? String(data.price) : '');
           setStock(data.stock != null ? String(data.stock) : '');
+        } else {
+          setVariants(data.product_variants || []);
         }
 
         // Map existing images to UploadedImage format
@@ -135,6 +139,11 @@ export const ProductForm = () => {
     if (!hasVariants) {
       if (!price) newErrors.price = 'Harga wajib diisi';
       if (stock === '') newErrors.stock = 'Stok wajib diisi';
+    } else {
+      if (variants.length < 2) newErrors.variants = 'Minimal 2 varian diperlukan';
+      if (variants.some(v => !v.name || v.price <= 0 || v.stock < 0)) {
+        newErrors.variants = 'Harap isi semua detail varian dengan benar';
+      }
     }
 
     setErrors(newErrors);
@@ -219,6 +228,29 @@ export const ProductForm = () => {
           if (imagesError) throw imagesError;
         }
 
+        // Handle Variants Update
+        if (hasVariants) {
+           for (const v of variants) {
+              if (v.id && v.id.length > 20) {
+                 await supabase.from('product_variants').update({
+                   name: v.name, price: Number(v.price), stock: Number(v.stock)
+                 }).eq('id', v.id);
+              } else {
+                 await supabase.from('product_variants').insert([{
+                   product_id: id, name: v.name, price: Number(v.price), stock: Number(v.stock)
+                 }]);
+              }
+           }
+           const currentIds = variants.filter(v => v.id && v.id.length > 20).map(v => v.id);
+           if (currentIds.length > 0) {
+              await supabase.from('product_variants').delete().eq('product_id', id).not('id', 'in', `(${currentIds.join(',')})`);
+           } else {
+              await supabase.from('product_variants').delete().eq('product_id', id);
+           }
+        } else {
+           await supabase.from('product_variants').delete().eq('product_id', id);
+        }
+
         toast.success('Produk berhasil diperbarui');
       } else {
         // INSERT new product
@@ -273,6 +305,17 @@ export const ProductForm = () => {
             );
 
           if (imagesError) throw imagesError;
+        }
+
+        // Insert variants
+        if (hasVariants && variants.length > 0) {
+           const variantRecords = variants.map(v => ({
+             product_id: productId,
+             name: v.name,
+             price: Number(v.price),
+             stock: Number(v.stock)
+           }));
+           await supabase.from('product_variants').insert(variantRecords);
         }
 
         toast.success('Produk berhasil ditambahkan');
@@ -409,13 +452,13 @@ export const ProductForm = () => {
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   className="border-slate-200 flex-1"
-                  disabled={loading}
+                  disabled={loading || hasVariants}
                   min="0"
                 />
                 <Select
                   value={weightUnit}
                   onValueChange={(val: any) => setWeightUnit(val)}
-                  disabled={loading}
+                  disabled={loading || hasVariants}
                 >
                   <SelectTrigger className="w-28 border-slate-200">
                     <SelectValue />
@@ -491,9 +534,10 @@ export const ProductForm = () => {
               )}
 
               {hasVariants && (
-                <p className="text-sm text-slate-600">
-                  Harga dan stok akan diatur per varian
-                </p>
+                <div className="space-y-2">
+                  <VariantTable variants={variants} onVariantsChange={setVariants} />
+                  {errors.variants && <p className="text-xs text-red-600">{errors.variants}</p>}
+                </div>
               )}
             </div>
           </div>

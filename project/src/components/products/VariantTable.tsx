@@ -1,13 +1,14 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2 } from 'lucide-react';
 
-interface Variant {
+export interface Variant {
   id: string;
   name: string;
-  price: number;
-  stock: number;
+  price: string;
+  stock: string;
 }
 
 interface VariantTableProps {
@@ -16,28 +17,42 @@ interface VariantTableProps {
 }
 
 export const VariantTable = ({ variants, onVariantsChange }: VariantTableProps) => {
+  const [localVariants, setLocalVariants] = useState<Variant[]>(variants);
+
+  // Sync parent -> local only when parent changes from outside (e.g., reset)
+  useEffect(() => {
+    setLocalVariants(variants);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const syncToParent = useCallback((updated: Variant[]) => {
+    onVariantsChange(updated);
+  }, [onVariantsChange]);
+
   const addVariant = () => {
     const newVariant: Variant = {
-      id: `${Date.now()}`,
+      id: `local-${Date.now()}`,
       name: '',
-      price: 0,
-      stock: 0,
+      price: '',
+      stock: '',
     };
-    onVariantsChange([...variants, newVariant]);
+    const updated = [...localVariants, newVariant];
+    setLocalVariants(updated);
+    syncToParent(updated);
   };
 
-  const updateVariant = (id: string, field: keyof Variant, value: any) => {
-    onVariantsChange(
-      variants.map((v) =>
-        v.id === id ? { ...v, [field]: value } : v
-      )
+  const updateVariant = (id: string, field: keyof Variant, value: string) => {
+    const updated = localVariants.map((v) =>
+      v.id === id ? { ...v, [field]: value } : v
     );
+    setLocalVariants(updated);
+    syncToParent(updated);
   };
 
   const removeVariant = (id: string) => {
-    onVariantsChange(variants.filter((v) => v.id !== id));
+    const updated = localVariants.filter((v) => v.id !== id);
+    setLocalVariants(updated);
+    syncToParent(updated);
   };
-
 
   return (
     <div className="space-y-4">
@@ -60,15 +75,20 @@ export const VariantTable = ({ variants, onVariantsChange }: VariantTableProps) 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {variants.map((variant) => (
+            {localVariants.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-sm text-slate-400 py-4">
+                  Belum ada varian. Klik "Tambah Varian" untuk menambahkan.
+                </TableCell>
+              </TableRow>
+            )}
+            {localVariants.map((variant) => (
               <TableRow key={variant.id}>
                 <TableCell>
                   <Input
                     placeholder="Contoh: Merah M"
                     value={variant.name}
-                    onChange={(e) =>
-                      updateVariant(variant.id, 'name', e.target.value)
-                    }
+                    onChange={(e) => updateVariant(variant.id, 'name', e.target.value)}
                     className="border-slate-200 text-sm"
                   />
                 </TableCell>
@@ -77,9 +97,8 @@ export const VariantTable = ({ variants, onVariantsChange }: VariantTableProps) 
                     type="number"
                     placeholder="0"
                     value={variant.price}
-                    onChange={(e) =>
-                      updateVariant(variant.id, 'price', Number(e.target.value))
-                    }
+                    min="0"
+                    onChange={(e) => updateVariant(variant.id, 'price', e.target.value)}
                     className="border-slate-200 text-sm"
                   />
                 </TableCell>
@@ -88,14 +107,14 @@ export const VariantTable = ({ variants, onVariantsChange }: VariantTableProps) 
                     type="number"
                     placeholder="0"
                     value={variant.stock}
-                    onChange={(e) =>
-                      updateVariant(variant.id, 'stock', Number(e.target.value))
-                    }
+                    min="0"
+                    onChange={(e) => updateVariant(variant.id, 'stock', e.target.value)}
                     className="border-slate-200 text-sm"
                   />
                 </TableCell>
                 <TableCell>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => removeVariant(variant.id)}
@@ -119,7 +138,7 @@ export const VariantTable = ({ variants, onVariantsChange }: VariantTableProps) 
         Tambah Varian
       </Button>
 
-      {variants.length < 2 && (
+      {localVariants.length < 2 && (
         <p className="text-sm text-red-600 font-medium">Minimal 2 varian diperlukan</p>
       )}
     </div>
