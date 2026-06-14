@@ -175,8 +175,8 @@ export const ProductForm = () => {
             weight_unit: weightUnit,
             category_id: categoryId || null,
             has_variants: hasVariants,
-            price: hasVariants ? null : Number(price),
-            stock: hasVariants ? null : Number(stock),
+            price: hasVariants ? Math.min(...variants.map(v => Number(v.price) || 0)) : Number(price),
+            stock: hasVariants ? variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0) : Number(stock),
             is_active: isActive,
           })
           .eq('id', id);
@@ -264,8 +264,8 @@ export const ProductForm = () => {
               weight_unit: weightUnit,
               category_id: categoryId || null,
               has_variants: hasVariants,
-              price: hasVariants ? null : Number(price),
-              stock: hasVariants ? null : Number(stock),
+              price: hasVariants ? Math.min(...variants.map(v => Number(v.price) || 0)) : Number(price),
+              stock: hasVariants ? variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0) : Number(stock),
               is_active: isActive,
               sold_count: 0,
             },
